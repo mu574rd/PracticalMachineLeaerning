@@ -1,0 +1,92 @@
+---
+title: "Prediction Assignment Write-up"
+author: "mu574rd"
+date: "April 22, 2016"
+output: html_document
+---
+### First steps: Loading our packages
+
+For the final assignment in the Practical Machine Learning class, our instructor has assigned a quiz that we must answer using a training and a testing dataset, which contain information from a popular bio-metrics tracking device. To begin our assignment, we shall first load the necessary packages and set a seed in order to ensure it is reproducible. 
+
+```{r}
+library(corrplot)
+library(caret)
+library(randomForest)
+library(knitr)
+set.seed(2425)
+```
+
+### Loading our data
+
+Packages set, we must verify and download the comma-separated tables that our instructor has provide. These two files contain all the data required for this assignment. We will store the "raw" data in the objects "training" and "testing". 
+
+```{r, echo=FALSE}
+if (!file.exists("pml-training.csv")) {
+    download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+        destfile = "pml-training.csv")
+}
+if (!file.exists("pml-testing.csv")) {
+    download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+        destfile = "pml-testing.csv")
+}
+training <- read.csv("pml-training.csv", na.strings = c("NA",""), header = TRUE)
+testing <- read.csv("pml-testing.csv", na.strings = c("NA",""), header = TRUE)
+```
+
+### First impressions
+
+It's a good idea to have a preliminary look at the files, primarily to verify columns with missing values. 
+
+```{r}
+dim(training)
+sum(complete.cases(training))
+```
+
+### Cleaning the data
+
+We can observe that there are some columns with missing values, and although the data itself is pretty well organized and categorized following the principles of clean data, it is a good idea to get rid of some of the unnecessary columns before we begin our actual predictions. 
+
+```{r}
+clean.train <- training[,(colSums(is.na(training)) == 0)]
+clean.test <- testing[,(colSums(is.na(testing)) == 0)]
+clean.train <- clean.train[, -c(1:5)]
+clean.test <- clean.test [, -c(1:5)]
+nzvcols <- nearZeroVar(clean.train)
+clean.train <- clean.train[, -nzvcols]
+clean.test <-  clean.test[, -nzvcols]
+```
+
+### Splitting our data for cross-validation
+
+Now that we have our mostly clean data, we shall split our new clean training data set into two unequal parts. One, which will actually use to train, will be around 3/4 of the observations, while the second object will have 1/4 of the observations. 
+
+```{r}
+inTrain = createDataPartition(y = clean.train$classe, p = 0.75, list = FALSE)
+part.train <- clean.train[inTrain,]
+part.validate <- clean.train[-inTrain,]
+```
+
+
+### Creating our model
+
+Let's see how and if our observations correlate in order to create an adequate fitting model. After that, a nice confusion matrix will be a crucial moment in our analysis and will allow us to know if we are in the right track. 
+
+```{r}
+model = randomForest(classe ~., data = part.train)
+model
+prediction <- predict(model, part.validate)
+confusion.matrix <- confusionMatrix(prediction, part.validate$classe)
+print(confusion.matrix)
+OUSError<- 1-sum(diag(confusion.matrix$table))/sum(confusion.matrix$table)
+OUSError
+```
+
+### Predictions
+
+Everything looks good and now we may do our predictions to the test set, which will result in our answers to the final quiz. 
+
+```{r}
+testSetPrediction <- predict(model, clean.test)
+testSetPrediction
+```
+
